@@ -90,7 +90,10 @@ func workerFile(pattern string, nFlag *bool, iFlag *bool, channel <-chan string,
 	defer fileWg.Done()
 
 	for file := range channel { // This keeps going until chan is closed
-		processFile(file, pattern, nFlag, iFlag)
+		err := processFile(file, pattern, nFlag, iFlag)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
 
