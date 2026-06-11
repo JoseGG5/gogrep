@@ -16,8 +16,7 @@ type resultRecord struct {
 	content string
 }
 
-func processFile(filePath string, pattern string, nFlag *bool, iFlag *bool, wg *sync.WaitGroup) error {
-	defer wg.Done()
+func processFile(filePath string, pattern string, nFlag *bool, iFlag *bool) error {
 
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -66,7 +65,7 @@ func processFolder(
 
 	defer wg.Done()
 
-	filepath.WalkDir(folderPath, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(folderPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("Error traversing folder %w:", err)
 		}
@@ -79,7 +78,20 @@ func processFolder(
 
 	})
 
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
 	return nil
+}
+
+func workerFile(pattern string, nFlag *bool, iFlag *bool, channel <-chan string, fileWg *sync.WaitGroup) {
+	defer fileWg.Done()
+
+	for file := range channel { // This keeps going until chan is closed
+		processFile(file, pattern, nFlag, iFlag)
+	}
 }
 
 func main() {
@@ -97,26 +109,41 @@ func main() {
 	pattern := args[0]
 	items := args[1:] // Could be files or folders
 
-	var wg sync.WaitGroup         // To avoid main to finish before the goroutines
+	var itemWg sync.WaitGroup // To avoid main to finish before the goroutines
+	var fileWg sync.WaitGroup
 	fileChan := make(chan string) // Used to recover channels in case we are traversing folders
 
+	// Create workers prior to create goroutines that send tasks through the channel if r is setted
+	if *rFlag {
+		for i := 0; i < 3; i++ {
+			fileWg.Add(1)
+			go workerFile(pattern, nFlag, iFlag, fileChan, &fileWg)
+		}
+	}
+
 	for _, item := range items {
-		wg.Add(1)
+		itemWg.Add(1)
 
 		if !*rFlag {
-			go processFile(item, pattern, nFlag, iFlag, &wg)
+			go func(item string) {
+				defer itemWg.Done()
+				err := processFile(item, pattern, nFlag, iFlag)
+				if err != nil {
+					fmt.Println("error: ", err)
+				}
+			}(item)
 		} else {
-
 			// The idea is that there is a goroutine per folder sent by user
 			// and each goroutine traverses the directory recursively and
 			// sends files found to a channel. Then N workers grab files from the channel
 			// and process them
-
-			go processFolder(item, &wg, fileChan)
-
+			go processFolder(item, &itemWg, fileChan)
 		}
-
 	}
 
-	wg.Wait()
+	itemWg.Wait()
+	close(fileChan) // We close the channel so that we can then wait for workers to finish
+
+	fileWg.Wait()
+
 }
