@@ -11,12 +11,14 @@ import (
 	"sync"
 )
 
+const NumWorkers = 3
+
 type resultRecord struct {
 	nline   int
 	content string
 }
 
-func processFile(filePath string, re *regexp.Regexp, nFlag *bool, iFlag *bool) error {
+func processFile(filePath string, re *regexp.Regexp, nFlag *bool) error {
 
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -81,11 +83,11 @@ func processFolder(
 	return nil
 }
 
-func workerFile(re *regexp.Regexp, nFlag *bool, iFlag *bool, channel <-chan string, fileWg *sync.WaitGroup) {
+func workerFile(re *regexp.Regexp, nFlag *bool, channel <-chan string, fileWg *sync.WaitGroup) {
 	defer fileWg.Done()
 
 	for file := range channel { // This keeps going until chan is closed
-		err := processFile(file, re, nFlag, iFlag)
+		err := processFile(file, re, nFlag)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -123,9 +125,9 @@ func main() {
 
 	// Create workers prior to create goroutines that send tasks through the channel if r is setted
 	if *rFlag {
-		for i := 0; i < 3; i++ {
+		for i := 0; i < NumWorkers; i++ {
 			fileWg.Add(1)
-			go workerFile(re, nFlag, iFlag, fileChan, &fileWg)
+			go workerFile(re, nFlag, fileChan, &fileWg)
 		}
 	}
 
@@ -135,7 +137,7 @@ func main() {
 		if !*rFlag {
 			go func(item string) {
 				defer itemWg.Done()
-				err := processFile(item, re, nFlag, iFlag)
+				err := processFile(item, re, nFlag)
 				if err != nil {
 					fmt.Println("error: ", err)
 				}
