@@ -1,29 +1,14 @@
-aaaaaaaaaa
-bbbbbbbbbb
-cccccccccc
-dddddddddd
-Content
-dddddddddd
-dddddddddd
-dddddddddd
-dddddddddd
-dddddddddd
-v
-v
-v
-v
-v
+func main() {
+    fmt.Println("Hello")
+}
 
-dddddddddd
-dddddddddd
-dddddddddd
-dddddddddd
-dddddddddd
-vv
-v
-vvv
-vvv
-dddddddddd
+FUNC helper() {}
 
+var username = "Jose"
 
-if
+email: jose@example.com
+EMAIL: ADMIN@COMPANY.COM
+
+12345
+abc123
+ABC123

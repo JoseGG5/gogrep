@@ -7,7 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
+	"regexp"
 	"sync"
 )
 
@@ -16,7 +16,7 @@ type resultRecord struct {
 	content string
 }
 
-func processFile(filePath string, pattern string, nFlag *bool, iFlag *bool) error {
+func processFile(filePath string, re *regexp.Regexp, nFlag *bool, iFlag *bool) error {
 
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -32,12 +32,7 @@ func processFile(filePath string, pattern string, nFlag *bool, iFlag *bool) erro
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		var isContained bool
-		if *iFlag {
-			isContained = strings.Contains(strings.ToLower(line), strings.ToLower(pattern))
-		} else {
-			isContained = strings.Contains(line, pattern)
-		}
+		isContained := re.MatchString(line)
 
 		if isContained {
 			record := resultRecord{nline, line}
@@ -86,11 +81,11 @@ func processFolder(
 	return nil
 }
 
-func workerFile(pattern string, nFlag *bool, iFlag *bool, channel <-chan string, fileWg *sync.WaitGroup) {
+func workerFile(re *regexp.Regexp, nFlag *bool, iFlag *bool, channel <-chan string, fileWg *sync.WaitGroup) {
 	defer fileWg.Done()
 
 	for file := range channel { // This keeps going until chan is closed
-		err := processFile(file, pattern, nFlag, iFlag)
+		err := processFile(file, re, nFlag, iFlag)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -112,6 +107,16 @@ func main() {
 	pattern := args[0]
 	items := args[1:] // Could be files or folders
 
+	// Compile the pattern
+	if *iFlag {
+		pattern = "(?i)" + pattern
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	var itemWg sync.WaitGroup // To avoid main to finish before the goroutines
 	var fileWg sync.WaitGroup
 	fileChan := make(chan string) // Used to recover channels in case we are traversing folders
@@ -120,7 +125,7 @@ func main() {
 	if *rFlag {
 		for i := 0; i < 3; i++ {
 			fileWg.Add(1)
-			go workerFile(pattern, nFlag, iFlag, fileChan, &fileWg)
+			go workerFile(re, nFlag, iFlag, fileChan, &fileWg)
 		}
 	}
 
@@ -130,7 +135,7 @@ func main() {
 		if !*rFlag {
 			go func(item string) {
 				defer itemWg.Done()
-				err := processFile(item, pattern, nFlag, iFlag)
+				err := processFile(item, re, nFlag, iFlag)
 				if err != nil {
 					fmt.Println("error: ", err)
 				}
